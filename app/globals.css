@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background-color: #12142b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* subtle focus ring for accessibility, kept quiet */
+:focus-visible {
+  outline: 2px solid #3d5cdb;
+  outline-offset: 2px;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+}
