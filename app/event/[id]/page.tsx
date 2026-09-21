@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import {
   OpenMicEvent,
@@ -295,13 +296,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
       <div className="mx-auto max-w-2xl">
         <header className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <span
+            <Image
+              src="/logo.png"
+              alt=""
               aria-hidden
-              className="inline-block h-6 w-6 rounded-full"
-              style={{
-                background:
-                  "conic-gradient(from 90deg, #B23A3A, #3D5CDB, #22A559, #B23A3A)",
-              }}
+              width={24}
+              height={24}
+              className="h-6 w-6 object-contain"
             />
             <span className="font-semibold">Openmic Timer</span>
           </div>
