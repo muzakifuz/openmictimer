@@ -11,8 +11,7 @@ import {
 import BadgePill from "@/components/BadgePill";
 import ConfirmModal from "@/components/ConfirmModal";
 import TransferModal from "@/components/TransferModal";
-
-const MINUTE_OPTIONS = Array.from({ length: 20 }, (_, i) => i + 1); // 1..20 min
+import Stepper from "@/components/Stepper";
 
 export default function EventPage({ params }: { params: { id: string } }) {
   const eventId = params.id;
@@ -40,6 +39,11 @@ export default function EventPage({ params }: { params: { id: string } }) {
     () => lineup.find((e) => e.status === "running") ?? null,
     [lineup]
   );
+
+  const timeError =
+    minMinutes > maxMinutes
+      ? "Minimum time can't be more than maximum time."
+      : null;
 
   const loadEvent = useCallback(async () => {
     const { data } = await supabase
@@ -106,7 +110,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   }, [eventId, loadLineup, loadEvent]);
 
   const saveRules = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || timeError) return;
     setSavingRules(true);
     const payload = {
       id: eventId,
@@ -128,11 +132,14 @@ export default function EventPage({ params }: { params: { id: string } }) {
   };
 
   const addToLineup = async () => {
+    if (!newLineupName.trim()) {
+      setLineupError("Please enter a name.");
+      return;
+    }
     if (!event) {
       setLineupError("Save rules before adding the lineup.");
       return;
     }
-    if (!newLineupName.trim()) return;
     setAddingLineup(true);
     setLineupError(null);
     const { error } = await supabase.from("lineup_entries").insert({
@@ -239,35 +246,28 @@ export default function EventPage({ params }: { params: { id: string } }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-semibold">Maximum Time (Min)</label>
-              <select
-                disabled={rulesLocked}
-                value={maxMinutes}
-                onChange={(e) => setMaxMinutes(Number(e.target.value))}
-                className="mt-2 w-full rounded-lg border border-base-border bg-base-card px-3 py-2 disabled:opacity-50"
-              >
-                {MINUTE_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-2">
+                <Stepper
+                  value={maxMinutes}
+                  onChange={setMaxMinutes}
+                  disabled={rulesLocked}
+                />
+              </div>
             </div>
             <div>
               <label className="text-sm font-semibold">Minimum Time (Min)</label>
-              <select
-                disabled={rulesLocked}
-                value={minMinutes}
-                onChange={(e) => setMinMinutes(Number(e.target.value))}
-                className="mt-2 w-full rounded-lg border border-base-border bg-base-card px-3 py-2 disabled:opacity-50"
-              >
-                {MINUTE_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-2">
+                <Stepper
+                  value={minMinutes}
+                  onChange={setMinMinutes}
+                  disabled={rulesLocked}
+                />
+              </div>
             </div>
           </div>
+          {timeError && (
+            <p className="mt-2 text-xs text-status-overtime">{timeError}</p>
+          )}
 
           <div className="mt-4">
             <label className="text-sm font-semibold">Openmic&apos;s Name</label>
@@ -276,7 +276,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Example: Openmic StandupIndo Jakbar"
-              className="mt-2 w-full rounded-lg border border-base-border bg-base-card px-3 py-2 placeholder:text-white/30 disabled:opacity-50"
+              className="mt-2 h-[50px] w-full rounded-lg border border-base-border bg-base-card px-3 placeholder:text-white/30 disabled:opacity-50"
             />
           </div>
 
@@ -297,118 +297,122 @@ export default function EventPage({ params }: { params: { id: string } }) {
           {rulesLocked ? (
             <button
               onClick={() => setEditingRules(true)}
-              className="mt-6 w-full rounded-lg border border-base-border bg-base-card py-3 text-sm font-semibold text-white/50 hover:text-white/80"
+              className="mt-6 h-[50px] w-full rounded-lg border border-base-border bg-base-card text-sm font-semibold text-white/50 hover:text-white/80"
             >
               Rules saved &middot; tap to edit
             </button>
           ) : (
             <button
               onClick={saveRules}
-              disabled={!name.trim() || savingRules}
-              className="mt-6 w-full rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon py-3 text-sm font-semibold text-white disabled:opacity-40"
+              disabled={!name.trim() || !!timeError || savingRules}
+              className="mt-6 h-[50px] w-full rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon text-sm font-semibold text-white disabled:opacity-40"
             >
               {savingRules ? "Saving..." : "Save Rules"}
             </button>
           )}
         </section>
 
-        {/* Lineup */}
-        <section className="mt-12">
-          <label className="text-sm font-semibold">Lineup Name</label>
-          <div className="mt-2 flex gap-3">
-            <input
-              value={newLineupName}
-              onChange={(e) => setNewLineupName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addToLineup()}
-              placeholder="Example: Pandji Pragiwaksono"
-              className="flex-1 rounded-lg border border-base-border bg-base-card px-3 py-2 placeholder:text-white/30"
-            />
-            <button
-              onClick={addToLineup}
-              disabled={!newLineupName.trim() || addingLineup}
-              className="shrink-0 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              + Add to Lineup
-            </button>
-          </div>
-          {lineupError && (
-            <p className="mt-2 text-xs text-status-overtime">{lineupError}</p>
-          )}
+        {/* Lineup: only shown once rules have been saved at least once */}
+        {event && (
+          <section className="mt-12">
+            <label className="text-sm font-semibold">Lineup Name</label>
+            <div className="mt-2 flex gap-3">
+              <input
+                value={newLineupName}
+                onChange={(e) => {
+                  setNewLineupName(e.target.value);
+                  if (lineupError) setLineupError(null);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && addToLineup()}
+                placeholder="Example: Pandji Pragiwaksono"
+                className="h-[50px] flex-1 rounded-lg border border-base-border bg-base-card px-3 placeholder:text-white/30"
+              />
+              <button
+                onClick={addToLineup}
+                disabled={addingLineup}
+                className="h-[50px] shrink-0 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                + Add to Lineup
+              </button>
+            </div>
+            {lineupError && (
+              <p className="mt-2 text-xs text-status-overtime">{lineupError}</p>
+            )}
 
-          <div className="mt-6 space-y-3">
-            {lineup.length === 0 ? (
-              <p className="py-10 text-center text-sm text-white/40">
-                No Data to Display
-              </p>
-            ) : (
-              lineup.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-center justify-between rounded-lg border border-base-border px-5 py-4"
-                >
-                  <span className="font-semibold">{entry.name}</span>
+            <div className="mt-6 space-y-3">
+              {lineup.length === 0 ? (
+                <p className="py-10 text-center text-sm text-white/40">
+                  No Data to Display
+                </p>
+              ) : (
+                lineup.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center justify-between rounded-lg border border-base-border px-5 py-4"
+                  >
+                    <span className="font-semibold">{entry.name}</span>
 
-                  {entry.status === "pending" && (
-                    <button
-                      onClick={() => startCount(entry)}
-                      className="flex items-center gap-2 rounded-lg bg-brand-blue px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
-                    >
-                      <ClockIcon /> Start Count
-                    </button>
-                  )}
+                    {entry.status === "pending" && (
+                      <button
+                        onClick={() => startCount(entry)}
+                        className="flex h-[50px] items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:brightness-110"
+                      >
+                        <ClockIcon /> Start Count
+                      </button>
+                    )}
 
-                  {entry.status === "running" && (
-                    <button
-                      onClick={() =>
-                        router.push(`/event/${eventId}/timer/${entry.id}`)
-                      }
-                      className="flex items-center gap-2 rounded-lg border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue"
-                    >
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-brand-blue" />
-                      Running
-                    </button>
-                  )}
+                    {entry.status === "running" && (
+                      <button
+                        onClick={() =>
+                          router.push(`/event/${eventId}/timer/${entry.id}`)
+                        }
+                        className="flex h-[50px] items-center gap-2 rounded-lg border border-brand-blue px-4 text-sm font-semibold text-brand-blue"
+                      >
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-brand-blue" />
+                        Running
+                      </button>
+                    )}
 
-                  {entry.status === "done" && (
-                    <div className="flex items-center gap-3">
-                      {entry.badge && overtimeEnabled && (
-                        <BadgePill badge={entry.badge} />
-                      )}
-                      <div className="text-right">
-                        <div className="text-xs text-white/40">Time</div>
-                        <div className="tabular-nums text-sm">
-                          {entry.elapsed_seconds != null
-                            ? formatDuration(entry.elapsed_seconds)
-                            : "--:--"}
+                    {entry.status === "done" && (
+                      <div className="flex items-center gap-3">
+                        {entry.badge && overtimeEnabled && (
+                          <BadgePill badge={entry.badge} />
+                        )}
+                        <div className="text-right">
+                          <div className="text-xs text-white/40">Time</div>
+                          <div className="tabular-nums text-sm">
+                            {entry.elapsed_seconds != null
+                              ? formatDuration(entry.elapsed_seconds)
+                              : "--:--"}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
 
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={() => setShowTransfer(true)}
-              disabled={!event}
-              className="flex items-center gap-2 rounded-lg border border-base-border px-4 py-2 text-sm font-semibold text-white/80 disabled:opacity-40"
-            >
-              <QrIcon /> Transfer the Timer
-            </button>
-            <button
-              onClick={downloadList}
-              disabled={lineup.length === 0}
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              <DownloadIcon /> Download List
-            </button>
-          </div>
-        </section>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowTransfer(true)}
+                className="flex h-[50px] items-center gap-2 rounded-lg border border-base-border px-4 text-sm font-semibold text-white/80"
+              >
+                <QrIcon /> Transfer the Timer
+              </button>
+              <button
+                onClick={downloadList}
+                disabled={lineup.length === 0}
+                className="flex h-[50px] items-center gap-2 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                <DownloadIcon /> Download List
+              </button>
+            </div>
+          </section>
+        )}
 
-        <footer className="mt-16 flex items-center justify-between text-xs text-white/30">
-          <span>Built with Openmic Timer</span>
+        <footer className="mt-16 text-center text-xs text-white/30">
+          Designed and Developed by Muzakki from StandupIndo Malang &amp; Batavia Jokers
         </footer>
       </div>
 
