@@ -496,9 +496,10 @@ export default function EventPage({ params }: { params: { id: string } }) {
           </section>
         )}
 
-        <footer className="mt-16 text-center text-xs text-white/30">
-          Designed and Developed by Muzakki from StandupIndo Malang &amp; Batavia Jokers
-        </footer>
+      <footer class="mt-16 text-center text-xs text-white/30">
+        If you have any suggestions for these tools, send me a DM on IG:
+        <a href="https://www.instagram.com/muzakifuz/" target="_blank">@muzakifuz</a>
+      </footer>
       </div>
 
       <TransferModal
