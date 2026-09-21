@@ -52,6 +52,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
   const [justSavedRules, setJustSavedRules] = useState(false);
   const [showEditRulesConfirm, setShowEditRulesConfirm] = useState(false);
+  const [reordering, setReordering] = useState(false);
   const lineupSectionRef = useRef<HTMLElement | null>(null);
 
   const runningEntry = useMemo(
@@ -195,6 +196,28 @@ export default function EventPage({ params }: { params: { id: string } }) {
     }
   };
 
+  // --- Reorder the lineup ---
+
+  const moveEntry = async (entry: LineupEntry, direction: "up" | "down") => {
+    const idx = lineup.findIndex((e) => e.id === entry.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (reordering || idx === -1 || swapIdx < 0 || swapIdx >= lineup.length) return;
+    const other = lineup[swapIdx];
+    setReordering(true);
+    await Promise.all([
+      supabase
+        .from("lineup_entries")
+        .update({ position: other.position })
+        .eq("id", entry.id),
+      supabase
+        .from("lineup_entries")
+        .update({ position: entry.position })
+        .eq("id", other.id),
+    ]);
+    await loadLineup();
+    setReordering(false);
+  };
+
   // --- Edit / delete a lineup entry ---
 
   const openEdit = (entry: LineupEntry) => setEditingEntry(entry);
@@ -335,8 +358,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
           {event && (
             <button
               onClick={() => setShowResetConfirm(true)}
-              className="text-xs font-semibold text-brand-blue hover:text-brand-blue/80"
+              className="flex items-center gap-1.5 text-xs font-semibold text-[#5EA1FF] hover:opacity-80"
             >
+              <RefreshIcon />
               Start a New Event
             </button>
           )}
@@ -489,12 +513,32 @@ export default function EventPage({ params }: { params: { id: string } }) {
                   No Data to Display
                 </p>
               ) : (
-                lineup.map((entry) => (
+                lineup.map((entry, index) => (
                   <div
                     key={entry.id}
                     className="flex flex-col gap-3 rounded-lg border border-base-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <span className="font-semibold">{entry.name}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex shrink-0 flex-col gap-1">
+                        <button
+                          onClick={() => moveEntry(entry, "up")}
+                          disabled={index === 0 || reordering}
+                          aria-label={`Move ${entry.name} up`}
+                          className="flex h-6 w-6 items-center justify-center rounded border border-base-border text-white/50 hover:bg-white/5 hover:text-white disabled:opacity-20"
+                        >
+                          <ArrowUpIcon />
+                        </button>
+                        <button
+                          onClick={() => moveEntry(entry, "down")}
+                          disabled={index === lineup.length - 1 || reordering}
+                          aria-label={`Move ${entry.name} down`}
+                          className="flex h-6 w-6 items-center justify-center rounded border border-base-border text-white/50 hover:bg-white/5 hover:text-white disabled:opacity-20"
+                        >
+                          <ArrowDownIcon />
+                        </button>
+                      </div>
+                      <span className="font-semibold">{entry.name}</span>
+                    </div>
 
                     <div className="flex items-center gap-3">
                       {entry.status === "pending" && (
@@ -557,7 +601,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 disabled={lineup.length === 0}
                 className="flex h-[50px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 text-sm font-semibold text-white disabled:opacity-40 sm:w-auto"
               >
-                <DownloadIcon /> Download List
+                <DocumentIcon /> Export List
               </button>
             </div>
           </section>
@@ -653,10 +697,72 @@ function QrIcon() {
   );
 }
 
-function DownloadIcon() {
+function RefreshIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 4v5h5M20 20v-5h-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 15a8 8 0 0 0 13.9 3.4M19.5 9A8 8 0 0 0 5.6 5.6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ArrowUpIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 19V5M5 12l7-7 7 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ArrowDownIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 5v14M5 12l7 7 7-7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DocumentIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M12 4v11m0 0l-4-4m4 4l4-4M4 19h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 3v5h5M9 13h6M9 17h6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
