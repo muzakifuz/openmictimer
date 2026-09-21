@@ -315,9 +315,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
           )}
         </header>
 
-        <h1 className="mt-6 text-3xl font-bold">Keep the laughs on time.</h1>
+        <h1 className="mt-6 text-3xl font-bold">Keep the Laughs On Time.</h1>
         <p className="mt-2 text-sm text-white/60">
-          Manage your lineup, track laughs, and stay on top of every comic&apos;s set.
+          Manage your lineup and keep every set on time.
         </p>
 
         {/* Rules card */}
@@ -497,7 +497,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
         )}
 
         <footer className="mt-16 text-center text-xs text-white/30">
-          If you have any suggestions for these tools, send me a DM on IG: @muzakifuz
+          If you have any suggestions for this tool, send me a DM on IG: @muzakifuz
         </footer>
       </div>
 
