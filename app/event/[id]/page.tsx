@@ -358,7 +358,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
           <div className="mt-4">
             <label className="flex items-center gap-1.5 text-sm font-semibold">
               Time Tolerance &plusmn;
-              <InfoTooltip text='The number of seconds a comic can run under or over the Maximum Time and still count as "on time". Past that window they\'re flagged under or overtime.' />
+              <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
             </label>
             <div className="mt-2 max-w-[140px]">
               <Stepper
