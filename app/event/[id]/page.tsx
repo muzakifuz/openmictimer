@@ -359,7 +359,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
           <div className="mt-4">
             <label className="flex items-center gap-1.5 text-sm font-semibold">
               Time Tolerance &plusmn;
-              <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
+              <InfoTooltip text='The number of seconds a comic can run under or over the Maximum Time and still count as "on time". Past that window they\'re flagged under or overtime.' />
             </label>
             <div className="mt-2 max-w-[140px]">
               <Stepper
@@ -369,6 +369,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 max={300}
                 disabled={rulesLocked}
               />
+              <p className="mt-1 text-center text-[11px] text-white/40">sec</p>
             </div>
           </div>
 
@@ -408,9 +409,11 @@ export default function EventPage({ params }: { params: { id: string } }) {
               <button
                 onClick={addToLineup}
                 disabled={addingLineup}
+                aria-label="Add to Lineup"
                 className="h-[50px] shrink-0 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 text-sm font-semibold text-white disabled:opacity-40"
               >
-                + Add to Lineup
+                <span className="sm:hidden text-lg leading-none">+</span>
+                <span className="hidden sm:inline">+ Add to Lineup</span>
               </button>
             </div>
             {lineupError && (
@@ -426,7 +429,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 lineup.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex items-center justify-between rounded-lg border border-base-border px-5 py-4"
+                    className="flex flex-col gap-3 rounded-lg border border-base-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span className="font-semibold">{entry.name}</span>
 
@@ -434,7 +437,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                       {entry.status === "pending" && (
                         <button
                           onClick={() => startCount(entry)}
-                          className="flex h-[50px] items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:brightness-110"
+                          className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:brightness-110 sm:flex-none"
                         >
                           <ClockIcon /> Start Count
                         </button>
@@ -445,7 +448,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                           onClick={() =>
                             router.push(`/event/${eventId}/timer/${entry.id}`)
                           }
-                          className="flex h-[50px] items-center gap-2 rounded-lg border border-brand-blue px-4 text-sm font-semibold text-brand-blue"
+                          className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-lg border border-brand-blue px-4 text-sm font-semibold text-brand-blue sm:flex-none"
                         >
                           <span className="h-2 w-2 animate-pulse rounded-full bg-brand-blue" />
                           Running
@@ -453,7 +456,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                       )}
 
                       {entry.status === "done" && (
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-1 items-center gap-3 sm:flex-none">
                           {entry.badge && overtimeEnabled && (
                             <BadgePill badge={entry.badge} />
                           )}
@@ -479,17 +482,17 @@ export default function EventPage({ params }: { params: { id: string } }) {
               )}
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={() => setShowTransfer(true)}
-                className="flex h-[50px] items-center gap-2 rounded-lg border border-base-border px-4 text-sm font-semibold text-white/80"
+                className="flex h-[50px] w-full items-center justify-center gap-2 rounded-lg border border-base-border px-4 text-sm font-semibold text-white/80 sm:w-auto"
               >
                 <QrIcon /> Transfer the Timer
               </button>
               <button
                 onClick={downloadList}
                 disabled={lineup.length === 0}
-                className="flex h-[50px] items-center gap-2 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 text-sm font-semibold text-white disabled:opacity-40"
+                className="flex h-[50px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 text-sm font-semibold text-white disabled:opacity-40 sm:w-auto"
               >
                 <DownloadIcon /> Download List
               </button>
