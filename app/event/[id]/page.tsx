@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
@@ -49,6 +49,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
   const [pendingNames, setPendingNames] = useState<string[]>([]);
+
+  const [justSavedRules, setJustSavedRules] = useState(false);
+  const lineupSectionRef = useRef<HTMLElement | null>(null);
 
   const runningEntry = useMemo(
     () => lineup.find((e) => e.status === "running") ?? null,
@@ -119,6 +122,15 @@ export default function EventPage({ params }: { params: { id: string } }) {
     };
   }, [eventId, loadLineup, loadEvent]);
 
+  // Scroll the newly-revealed lineup section into view right after Save
+  // Rules succeeds, so the person notices where to add names next.
+  useEffect(() => {
+    if (justSavedRules && event) {
+      lineupSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setJustSavedRules(false);
+    }
+  }, [justSavedRules, event]);
+
   const saveRules = async () => {
     if (!name.trim()) return;
     setSavingRules(true);
@@ -138,6 +150,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
     if (!error && data) {
       setEvent(data as OpenMicEvent);
       setEditingRules(false);
+      setJustSavedRules(true);
     }
   };
 
@@ -309,9 +322,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
           {event && (
             <button
               onClick={() => setShowResetConfirm(true)}
-              className="text-xs text-white/40 hover:text-white/70"
+              className="text-xs font-semibold text-brand-blue hover:text-brand-blue/80"
             >
-              Start a new event
+              Start a New Event
             </button>
           )}
         </header>
@@ -393,7 +406,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
         {/* Lineup: only shown once rules have been saved at least once */}
         {event && (
-          <section className="mt-12">
+          <section ref={lineupSectionRef} className="mt-12">
             <label className="text-sm font-semibold">Lineup Name</label>
             <div className="mt-2 flex gap-3">
               <input
