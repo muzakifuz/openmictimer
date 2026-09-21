@@ -51,6 +51,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [pendingNames, setPendingNames] = useState<string[]>([]);
 
   const [justSavedRules, setJustSavedRules] = useState(false);
+  const [showEditRulesConfirm, setShowEditRulesConfirm] = useState(false);
   const lineupSectionRef = useRef<HTMLElement | null>(null);
 
   const runningEntry = useMemo(
@@ -198,9 +199,16 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
   const openEdit = (entry: LineupEntry) => setEditingEntry(entry);
 
-  const saveEditedEntry = async (newName: string, newElapsedSeconds: number) => {
+  const saveEditedEntry = async (
+    newName: string,
+    newElapsedSeconds: number,
+    newPerformanceNote: string
+  ) => {
     if (!editingEntry || !newName) return;
-    const updates: Record<string, unknown> = { name: newName };
+    const updates: Record<string, unknown> = {
+      name: newName,
+      performance_note: newPerformanceNote || null,
+    };
     if (editingEntry.status === "done") {
       updates.elapsed_seconds = newElapsedSeconds;
       updates.badge = overtimeEnabled
@@ -226,6 +234,10 @@ export default function EventPage({ params }: { params: { id: string } }) {
     if (entry.status !== "done") return "Not yet on stage";
     if (!overtimeEnabled) return "-";
     return entry.badge ? badgeLabel[entry.badge as Badge] : "-";
+  };
+
+  const performanceNoteFor = (entry: LineupEntry): string => {
+    return entry.performance_note?.trim() ? entry.performance_note.trim() : "-";
   };
 
   const buildAndDownloadPdf = async () => {
@@ -255,11 +267,12 @@ export default function EventPage({ params }: { params: { id: string } }) {
         ? formatDuration(entry.elapsed_seconds)
         : "--:--",
       noteFor(entry),
+      performanceNoteFor(entry),
     ]);
 
     autoTable(doc, {
       startY: 130,
-      head: [["Lineup Name", "Stage Time", "Note"]],
+      head: [["Lineup Name", "Stage Time", "Timer Note", "Performance Note"]],
       body: rows,
       styles: { font: "helvetica", fontSize: 10, cellPadding: 6 },
       headStyles: { fillColor: [178, 58, 58], textColor: 255 },
@@ -336,71 +349,108 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
         {/* Rules card */}
         <section className="mt-8">
-          <div>
-            <label className="text-sm font-semibold">Openmic&apos;s Name</label>
-            <input
-              disabled={rulesLocked}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Example: Openmic StandupIndo Jakbar"
-              className="mt-2 h-[50px] w-full rounded-lg border border-base-border bg-base-card px-3 placeholder:text-white/30 disabled:opacity-50"
-            />
-          </div>
-
-          <label className="mt-4 flex w-fit items-center gap-2 text-sm font-semibold text-white">
-            <input
-              type="checkbox"
-              disabled={rulesLocked}
-              checked={overtimeEnabled}
-              onChange={(e) => setOvertimeEnabled(e.target.checked)}
-              className="h-4 w-4 rounded border-base-border accent-brand-blue"
-            />
-            Overtime Note
-          </label>
-
-          <div className="mt-4">
-            <label className="text-sm font-semibold">Maximum Time</label>
-            <div className="mt-2 max-w-[220px]">
-              <DurationInput
-                totalSeconds={maxSeconds}
-                onChange={setMaxSeconds}
-                disabled={rulesLocked}
-              />
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="flex items-center gap-1.5 text-sm font-semibold">
-              Time Tolerance &plusmn;
-              <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
-            </label>
-            <div className="mt-2 max-w-[140px]">
-              <Stepper
-                value={toleranceSeconds}
-                onChange={setToleranceSeconds}
-                min={0}
-                max={300}
-                disabled={rulesLocked}
-              />
-              <p className="mt-1 text-center text-[11px] text-white/40">sec</p>
-            </div>
-          </div>
-
           {rulesLocked ? (
-            <button
-              onClick={() => setEditingRules(true)}
-              className="mt-6 h-[50px] w-full rounded-lg border border-base-border bg-base-card text-sm font-semibold text-white/50 hover:text-white/80"
-            >
-              Rules saved &middot; tap to edit
-            </button>
+            <div className="rounded-lg border border-white/15 p-5">
+              <label className="text-sm text-white/50">Openmic&apos;s Name</label>
+              <p className="mt-1 text-lg font-bold text-white">{name}</p>
+
+              <div className="mt-5 grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm text-white/50">Overtime Note</label>
+                  <p className="mt-1 font-bold text-white">
+                    {overtimeEnabled ? "Yes" : "No"}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-white/50">Maximum Time</label>
+                  <p className="mt-1 font-bold text-white">
+                    {formatDuration(maxSeconds)}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-white/50">Time Tolerance</label>
+                  <p className="mt-1 font-bold text-white">
+                    {toleranceSeconds} Sec.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowEditRulesConfirm(true)}
+                className="mt-6 flex h-[50px] w-full items-center justify-center gap-2 rounded-lg border border-white/30 text-sm font-semibold text-white hover:bg-white/5"
+              >
+                <PencilIcon /> Edit Detail
+              </button>
+            </div>
           ) : (
-            <button
-              onClick={saveRules}
-              disabled={!name.trim() || savingRules}
-              className="mt-6 h-[50px] w-full rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon text-sm font-semibold text-white disabled:opacity-40"
-            >
-              {savingRules ? "Saving..." : "Save Rules"}
-            </button>
+            <>
+              <div>
+                <label className="text-sm font-semibold">Openmic&apos;s Name</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Example: Openmic StandupIndo Jakbar"
+                  className="mt-2 h-[50px] w-full rounded-lg border border-base-border bg-base-card px-3 placeholder:text-white/30"
+                />
+              </div>
+
+              <label className="mt-4 flex w-fit items-center gap-2 text-sm font-semibold text-white">
+                <input
+                  type="checkbox"
+                  checked={overtimeEnabled}
+                  onChange={(e) => setOvertimeEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-base-border accent-brand-blue"
+                />
+                Overtime Note
+              </label>
+
+              <div className="mt-4">
+                <label className="text-sm font-semibold">Maximum Time</label>
+                <div className="mt-2 max-w-[220px]">
+                  <DurationInput totalSeconds={maxSeconds} onChange={setMaxSeconds} />
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="flex items-center gap-1.5 text-sm font-semibold">
+                  Time Tolerance &plusmn;
+                  <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
+                </label>
+                <div className="mt-2 max-w-[140px]">
+                  <Stepper
+                    value={toleranceSeconds}
+                    onChange={setToleranceSeconds}
+                    min={0}
+                    max={300}
+                  />
+                  <p className="mt-1 text-center text-[11px] text-white/40">sec</p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex gap-3">
+                {event && (
+                  <button
+                    onClick={() => {
+                      setName(event.name);
+                      setMaxSeconds(event.max_time_seconds);
+                      setToleranceSeconds(event.tolerance_seconds);
+                      setOvertimeEnabled(event.overtime_note_enabled);
+                      setEditingRules(false);
+                    }}
+                    className="h-[50px] shrink-0 rounded-lg border border-base-border px-5 text-sm font-semibold text-white/70 hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  onClick={saveRules}
+                  disabled={!name.trim() || savingRules}
+                  className="h-[50px] w-full rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  {savingRules ? "Saving..." : "Save Rules"}
+                </button>
+              </div>
+            </>
           )}
         </section>
 
@@ -525,6 +575,18 @@ export default function EventPage({ params }: { params: { id: string } }) {
       />
 
       <ConfirmModal
+        open={showEditRulesConfirm}
+        title="Edit event rules?"
+        description="Changing the name, overtime note, maximum time, or tolerance only applies going forward. It won't change the Stage Time, Timer Note, or Performance Note already recorded for anyone who's already been on stage."
+        confirmLabel="Edit Detail"
+        onConfirm={() => {
+          setShowEditRulesConfirm(false);
+          setEditingRules(true);
+        }}
+        onCancel={() => setShowEditRulesConfirm(false)}
+      />
+
+      <ConfirmModal
         open={showResetConfirm}
         title="Start a new event?"
         description="This clears the saved rules and the entire lineup for this event. This can't be undone."
@@ -549,6 +611,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
         open={!!editingEntry}
         name={editingEntry?.name ?? ""}
         elapsedSeconds={editingEntry?.elapsed_seconds ?? 0}
+        performanceNote={editingEntry?.performance_note ?? ""}
         showTime={editingEntry?.status === "done"}
         onSave={saveEditedEntry}
         onDelete={() => setShowDeleteConfirm(true)}

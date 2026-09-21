@@ -19,6 +19,7 @@ export type LineupEntry = {
   started_at: string | null;
   elapsed_seconds: number | null;
   badge: Badge | null;
+  performance_note: string | null;
   created_at: string;
 };
 

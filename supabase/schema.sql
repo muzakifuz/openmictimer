@@ -21,8 +21,13 @@ create table if not exists lineup_entries (
   started_at timestamptz,
   elapsed_seconds integer,
   badge text check (badge in ('under', 'on_time', 'overtime')),
+  performance_note text,
   created_at timestamptz not null default now()
 );
+
+-- Safe to re-run: adds the Performance Note column to a database created
+-- before this field existed, without touching any existing rows.
+alter table lineup_entries add column if not exists performance_note text;
 
 create index if not exists lineup_entries_event_id_idx on lineup_entries (event_id, position);
 
