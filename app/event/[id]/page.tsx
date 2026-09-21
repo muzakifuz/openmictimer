@@ -6,12 +6,21 @@ import { supabase } from "@/lib/supabase";
 import {
   OpenMicEvent,
   LineupEntry,
+  Badge,
+  badgeLabel,
+  computeBadge,
   formatDuration,
 } from "@/lib/types";
 import BadgePill from "@/components/BadgePill";
 import ConfirmModal from "@/components/ConfirmModal";
 import TransferModal from "@/components/TransferModal";
 import Stepper from "@/components/Stepper";
+import DurationInput from "@/components/DurationInput";
+import InfoTooltip from "@/components/InfoTooltip";
+import EditEntryModal from "@/components/EditEntryModal";
+
+const DEFAULT_MAX_SECONDS = 300; // 5 min
+const DEFAULT_TOLERANCE_SECONDS = 15;
 
 export default function EventPage({ params }: { params: { id: string } }) {
   const eventId = params.id;
@@ -21,8 +30,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [event, setEvent] = useState<OpenMicEvent | null>(null);
   const [editingRules, setEditingRules] = useState(true);
 
-  const [maxMinutes, setMaxMinutes] = useState(5);
-  const [minMinutes, setMinMinutes] = useState(5);
+  const [maxSeconds, setMaxSeconds] = useState(DEFAULT_MAX_SECONDS);
+  const [toleranceSeconds, setToleranceSeconds] = useState(DEFAULT_TOLERANCE_SECONDS);
   const [name, setName] = useState("");
   const [overtimeEnabled, setOvertimeEnabled] = useState(true);
   const [savingRules, setSavingRules] = useState(false);
@@ -35,15 +44,15 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  const [editingEntry, setEditingEntry] = useState<LineupEntry | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
+  const [pendingNames, setPendingNames] = useState<string[]>([]);
+
   const runningEntry = useMemo(
     () => lineup.find((e) => e.status === "running") ?? null,
     [lineup]
   );
-
-  const timeError =
-    minMinutes > maxMinutes
-      ? "Minimum time can't be more than maximum time."
-      : null;
 
   const loadEvent = useCallback(async () => {
     const { data } = await supabase
@@ -54,8 +63,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
     if (data) {
       setEvent(data as OpenMicEvent);
-      setMaxMinutes(Math.round(data.max_time_seconds / 60));
-      setMinMinutes(Math.round(data.min_time_seconds / 60));
+      setMaxSeconds(data.max_time_seconds);
+      setToleranceSeconds(data.tolerance_seconds);
       setName(data.name);
       setOvertimeEnabled(data.overtime_note_enabled);
       setEditingRules(false);
@@ -110,13 +119,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
   }, [eventId, loadLineup, loadEvent]);
 
   const saveRules = async () => {
-    if (!name.trim() || timeError) return;
+    if (!name.trim()) return;
     setSavingRules(true);
     const payload = {
       id: eventId,
       name: name.trim(),
-      max_time_seconds: maxMinutes * 60,
-      min_time_seconds: minMinutes * 60,
+      max_time_seconds: maxSeconds,
+      tolerance_seconds: toleranceSeconds,
       overtime_note_enabled: overtimeEnabled,
     };
     const { data, error } = await supabase
@@ -171,24 +180,94 @@ export default function EventPage({ params }: { params: { id: string } }) {
     }
   };
 
-  const downloadList = () => {
-    const rows = [["Name", "Status", "Time", "Badge"]];
-    lineup.forEach((e) => {
-      rows.push([
-        e.name,
-        e.status,
-        e.elapsed_seconds != null ? formatDuration(e.elapsed_seconds) : "",
-        e.badge ?? "",
-      ]);
+  // --- Edit / delete a lineup entry ---
+
+  const openEdit = (entry: LineupEntry) => setEditingEntry(entry);
+
+  const saveEditedEntry = async (newName: string, newElapsedSeconds: number) => {
+    if (!editingEntry || !newName) return;
+    const updates: Record<string, unknown> = { name: newName };
+    if (editingEntry.status === "done") {
+      updates.elapsed_seconds = newElapsedSeconds;
+      updates.badge = overtimeEnabled
+        ? computeBadge(newElapsedSeconds, maxSeconds, toleranceSeconds)
+        : null;
+    }
+    await supabase.from("lineup_entries").update(updates).eq("id", editingEntry.id);
+    setEditingEntry(null);
+    loadLineup();
+  };
+
+  const confirmDeleteEntry = async () => {
+    if (!editingEntry) return;
+    await supabase.from("lineup_entries").delete().eq("id", editingEntry.id);
+    setShowDeleteConfirm(false);
+    setEditingEntry(null);
+    loadLineup();
+  };
+
+  // --- PDF export ---
+
+  const noteFor = (entry: LineupEntry): string => {
+    if (entry.status !== "done") return "Not yet on stage";
+    if (!overtimeEnabled) return "-";
+    return entry.badge ? badgeLabel[entry.badge as Badge] : "-";
+  };
+
+  const buildAndDownloadPdf = async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const { default: autoTable } = await import("jspdf-autotable");
+
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text(event?.name || "Openmic", 40, 48);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Maximum Time: ${formatDuration(maxSeconds)}`, 40, 68);
+    doc.text(`Time Tolerance: \u00B1 ${toleranceSeconds}s`, 40, 82);
+    doc.text(
+      `Overtime Note: ${overtimeEnabled ? "Enabled" : "Disabled"}`,
+      40,
+      96
+    );
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 110);
+
+    const rows = lineup.map((entry) => [
+      entry.name,
+      entry.status === "done" && entry.elapsed_seconds != null
+        ? formatDuration(entry.elapsed_seconds)
+        : "--:--",
+      noteFor(entry),
+    ]);
+
+    autoTable(doc, {
+      startY: 130,
+      head: [["Lineup Name", "Stage Time", "Note"]],
+      body: rows,
+      styles: { font: "helvetica", fontSize: 10, cellPadding: 6 },
+      headStyles: { fillColor: [178, 58, 58], textColor: 255 },
+      columnStyles: { 1: { halign: "center" } },
     });
-    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${event?.name || "openmic"}-lineup.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+    doc.save(`${event?.name || "openmic"}-lineup.pdf`);
+  };
+
+  const downloadList = () => {
+    const notYetOnStage = lineup.filter((e) => e.status !== "done");
+    if (notYetOnStage.length > 0) {
+      setPendingNames(notYetOnStage.map((e) => e.name));
+      setShowDownloadConfirm(true);
+      return;
+    }
+    buildAndDownloadPdf();
+  };
+
+  const confirmDownloadAnyway = () => {
+    setShowDownloadConfirm(false);
+    buildAndDownloadPdf();
   };
 
   const transferUrl = useMemo(() => {
@@ -243,33 +322,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
         {/* Rules card */}
         <section className="mt-8">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-semibold">Maximum Time (Min)</label>
-              <div className="mt-2">
-                <Stepper
-                  value={maxMinutes}
-                  onChange={setMaxMinutes}
-                  disabled={rulesLocked}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-semibold">Minimum Time (Min)</label>
-              <div className="mt-2">
-                <Stepper
-                  value={minMinutes}
-                  onChange={setMinMinutes}
-                  disabled={rulesLocked}
-                />
-              </div>
-            </div>
-          </div>
-          {timeError && (
-            <p className="mt-2 text-xs text-status-overtime">{timeError}</p>
-          )}
-
-          <div className="mt-4">
+          <div>
             <label className="text-sm font-semibold">Openmic&apos;s Name</label>
             <input
               disabled={rulesLocked}
@@ -280,18 +333,42 @@ export default function EventPage({ params }: { params: { id: string } }) {
             />
           </div>
 
+          <label className="mt-4 flex w-fit items-center gap-2 text-sm font-semibold text-white">
+            <input
+              type="checkbox"
+              disabled={rulesLocked}
+              checked={overtimeEnabled}
+              onChange={(e) => setOvertimeEnabled(e.target.checked)}
+              className="h-4 w-4 rounded border-base-border accent-brand-blue"
+            />
+            Overtime Note
+          </label>
+
           <div className="mt-4">
-            <label className="text-sm font-semibold">Overtime Note</label>
-            <label className="mt-2 flex w-fit items-center gap-2 text-sm text-white/80">
-              <input
-                type="checkbox"
+            <label className="text-sm font-semibold">Maximum Time</label>
+            <div className="mt-2 max-w-[220px]">
+              <DurationInput
+                totalSeconds={maxSeconds}
+                onChange={setMaxSeconds}
                 disabled={rulesLocked}
-                checked={overtimeEnabled}
-                onChange={(e) => setOvertimeEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-base-border accent-brand-blue"
               />
-              Yes
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="flex items-center gap-1.5 text-sm font-semibold">
+              Time Tolerance &plusmn;
+              <InfoTooltip text='The number of seconds a comic can run under or over the Maximum Time and still count as "on time". Past that window they\'re flagged under or overtime.' />
             </label>
+            <div className="mt-2 max-w-[140px]">
+              <Stepper
+                value={toleranceSeconds}
+                onChange={setToleranceSeconds}
+                min={0}
+                max={300}
+                disabled={rulesLocked}
+              />
+            </div>
           </div>
 
           {rulesLocked ? (
@@ -304,7 +381,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
           ) : (
             <button
               onClick={saveRules}
-              disabled={!name.trim() || !!timeError || savingRules}
+              disabled={!name.trim() || savingRules}
               className="mt-6 h-[50px] w-full rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon text-sm font-semibold text-white disabled:opacity-40"
             >
               {savingRules ? "Saving..." : "Save Rules"}
@@ -352,42 +429,50 @@ export default function EventPage({ params }: { params: { id: string } }) {
                   >
                     <span className="font-semibold">{entry.name}</span>
 
-                    {entry.status === "pending" && (
-                      <button
-                        onClick={() => startCount(entry)}
-                        className="flex h-[50px] items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:brightness-110"
-                      >
-                        <ClockIcon /> Start Count
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {entry.status === "pending" && (
+                        <button
+                          onClick={() => startCount(entry)}
+                          className="flex h-[50px] items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:brightness-110"
+                        >
+                          <ClockIcon /> Start Count
+                        </button>
+                      )}
 
-                    {entry.status === "running" && (
-                      <button
-                        onClick={() =>
-                          router.push(`/event/${eventId}/timer/${entry.id}`)
-                        }
-                        className="flex h-[50px] items-center gap-2 rounded-lg border border-brand-blue px-4 text-sm font-semibold text-brand-blue"
-                      >
-                        <span className="h-2 w-2 animate-pulse rounded-full bg-brand-blue" />
-                        Running
-                      </button>
-                    )}
+                      {entry.status === "running" && (
+                        <button
+                          onClick={() =>
+                            router.push(`/event/${eventId}/timer/${entry.id}`)
+                          }
+                          className="flex h-[50px] items-center gap-2 rounded-lg border border-brand-blue px-4 text-sm font-semibold text-brand-blue"
+                        >
+                          <span className="h-2 w-2 animate-pulse rounded-full bg-brand-blue" />
+                          Running
+                        </button>
+                      )}
 
-                    {entry.status === "done" && (
-                      <div className="flex items-center gap-3">
-                        {entry.badge && overtimeEnabled && (
-                          <BadgePill badge={entry.badge} />
-                        )}
-                        <div className="text-right">
-                          <div className="text-xs text-white/40">Time</div>
-                          <div className="tabular-nums text-sm">
+                      {entry.status === "done" && (
+                        <div className="flex items-center gap-3">
+                          {entry.badge && overtimeEnabled && (
+                            <BadgePill badge={entry.badge} />
+                          )}
+                          <div className="tabular-nums text-[18px] text-white">
+                            Time:{" "}
                             {entry.elapsed_seconds != null
                               ? formatDuration(entry.elapsed_seconds)
                               : "--:--"}
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+
+                      <button
+                        onClick={() => openEdit(entry)}
+                        aria-label={`Edit ${entry.name}`}
+                        className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-lg border border-base-border text-white/60 hover:bg-white/5 hover:text-white"
+                      >
+                        <PencilIcon />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -421,6 +506,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
         url={transferUrl}
         onClose={() => setShowTransfer(false)}
       />
+
       <ConfirmModal
         open={showResetConfirm}
         title="Start a new event?"
@@ -429,6 +515,39 @@ export default function EventPage({ params }: { params: { id: string } }) {
         danger
         onConfirm={confirmReset}
         onCancel={() => setShowResetConfirm(false)}
+      />
+
+      <ConfirmModal
+        open={showDownloadConfirm}
+        title="Some comics haven't been on stage yet"
+        description={`${pendingNames
+          .map((n) => `\u2022 ${n} - Not yet on stage`)
+          .join("\n")}\n\nDownload the list anyway?`}
+        confirmLabel="Download anyway"
+        onConfirm={confirmDownloadAnyway}
+        onCancel={() => setShowDownloadConfirm(false)}
+      />
+
+      <EditEntryModal
+        open={!!editingEntry}
+        name={editingEntry?.name ?? ""}
+        elapsedSeconds={editingEntry?.elapsed_seconds ?? 0}
+        showTime={editingEntry?.status === "done"}
+        onSave={saveEditedEntry}
+        onDelete={() => setShowDeleteConfirm(true)}
+        onClose={() => setEditingEntry(null)}
+      />
+
+      <ConfirmModal
+        open={showDeleteConfirm}
+        title="Remove from lineup?"
+        description={`This removes ${
+          editingEntry?.name ?? "this comic"
+        } from the lineup. This can't be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDeleteEntry}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
     </div>
   );
@@ -458,6 +577,20 @@ function DownloadIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <path d="M12 4v11m0 0l-4-4m4 4l4-4M4 19h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 20h4L18.5 9.5a2.121 2.121 0 0 0-3-3L5 17v3zM14.5 6.5l3 3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

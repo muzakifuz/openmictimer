@@ -2,7 +2,7 @@ export type OpenMicEvent = {
   id: string;
   name: string;
   max_time_seconds: number;
-  min_time_seconds: number;
+  tolerance_seconds: number;
   overtime_note_enabled: boolean;
   created_at: string;
 };
@@ -24,11 +24,13 @@ export type LineupEntry = {
 
 export function computeBadge(
   elapsedSeconds: number,
-  minSeconds: number,
-  maxSeconds: number
+  maxSeconds: number,
+  toleranceSeconds: number
 ): Badge {
-  if (elapsedSeconds < minSeconds) return "under";
-  if (elapsedSeconds <= maxSeconds) return "on_time";
+  const lower = maxSeconds - toleranceSeconds;
+  const upper = maxSeconds + toleranceSeconds;
+  if (elapsedSeconds < lower) return "under";
+  if (elapsedSeconds <= upper) return "on_time";
   return "overtime";
 }
 

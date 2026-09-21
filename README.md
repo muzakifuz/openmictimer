@@ -10,21 +10,27 @@ deployed on Vercel.
 - Visiting the site creates a fresh event and takes you to `/event/[id]`.
   That URL is your event's private "manage" link — bookmark or share it
   with co-hosts.
-- **Save Rules**: max/min time, event name, and whether to show
-  under/on-time/overtime badges.
+- **Save Rules**: event name, whether to show under/on-time/overtime
+  badges, a Maximum Time (minutes and seconds), and a Time Tolerance ±
+  (seconds). The on-time window is `Maximum Time ± Tolerance` — under
+  that window is "under", inside it is "on time", past it is "overtime".
 - **Add to Lineup**: add each comic by name. Tap **Start Count** to open
   the fullscreen timer for that person.
 - **Fullscreen timer**: counts up from 0:00. Background stays neutral
-  before the minimum time, turns green once you're in the min–max window,
-  and turns red past the maximum. Tap **Stop** to record the final time
-  and badge, then you're back on the lineup.
+  below the tolerance window, turns green while inside it, and turns red
+  past it. Tap **Stop** to record the final time and badge.
+- **Edit a lineup entry**: the pencil icon on each row opens a dialog to
+  rename the entry, adjust its recorded stage time (once it's finished),
+  or delete it from the lineup entirely.
 - **Transfer the Timer**: shows a QR code (and a copy-able link) to the
   live timer. Scan it on another phone or laptop — e.g. handing control
   from the sign-up table to the stage — and it shows the exact same
   running timer, in sync, because the timer's state lives in Supabase
   rather than in one browser tab.
-- **Download List**: exports the lineup (name, status, time, badge) as a
-  CSV.
+- **Download List**: exports an A4 PDF with the event's rules and a
+  table of Lineup Name / Stage Time / Note. If anyone hasn't performed
+  yet, you'll get a confirmation first; if you download anyway, their
+  row shows "Not yet on stage" with no time.
 
 ## Assumptions worth knowing about
 

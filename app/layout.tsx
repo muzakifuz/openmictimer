@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Onest } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const onest = Onest({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-onest",
   display: "swap",
 });
 
@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={onest.variable}>
       <body className="bg-base text-white font-sans antialiased min-h-screen">
         {children}
       </body>

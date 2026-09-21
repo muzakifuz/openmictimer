@@ -25,7 +25,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["var(--font-onest)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "10px",

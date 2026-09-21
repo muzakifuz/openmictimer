@@ -7,7 +7,7 @@ create table if not exists events (
   id uuid primary key default uuid_generate_v4(),
   name text not null default '',
   max_time_seconds integer not null default 300,
-  min_time_seconds integer not null default 300,
+  tolerance_seconds integer not null default 15,
   overtime_note_enabled boolean not null default true,
   created_at timestamptz not null default now()
 );

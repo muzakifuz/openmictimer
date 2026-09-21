@@ -25,7 +25,7 @@ export default function ConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
       <div className="w-full max-w-sm rounded-lg border border-base-border bg-base-card p-6">
         <h2 className="text-lg font-semibold text-white">{title}</h2>
-        <p className="mt-2 text-sm text-white/70">{description}</p>
+        <p className="mt-2 whitespace-pre-line text-sm text-white/70">{description}</p>
         <div className="mt-6 flex justify-end gap-3">
           <button
             onClick={onCancel}

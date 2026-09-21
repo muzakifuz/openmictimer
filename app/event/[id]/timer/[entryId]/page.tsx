@@ -70,11 +70,11 @@ export default function TimerPage({
   }, [entry, now]);
 
   const overtimeEnabled = event?.overtime_note_enabled ?? true;
-  const minSeconds = event?.min_time_seconds ?? 0;
   const maxSeconds = event?.max_time_seconds ?? Infinity;
+  const toleranceSeconds = event?.tolerance_seconds ?? 0;
 
   const badge = overtimeEnabled
-    ? computeBadge(elapsedSeconds, minSeconds, maxSeconds)
+    ? computeBadge(elapsedSeconds, maxSeconds, toleranceSeconds)
     : null;
 
   const bgClass =
@@ -88,7 +88,7 @@ export default function TimerPage({
     if (!entry || stopping) return;
     setStopping(true);
     const finalBadge = overtimeEnabled
-      ? computeBadge(elapsedSeconds, minSeconds, maxSeconds)
+      ? computeBadge(elapsedSeconds, maxSeconds, toleranceSeconds)
       : null;
     await supabase
       .from("lineup_entries")
