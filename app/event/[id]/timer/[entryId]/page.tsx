@@ -190,7 +190,7 @@ export default function TimerPage({
         </button>
       )}
       <p className="text-lg text-white/80">{entry.name}</p>
-      <div className="mt-4 tabular-nums text-[144px] font-bold text-white md:text-[400px]">
+      <div className="mt-4 tabular-nums text-[115px] font-bold text-white md:text-[400px]">
         {formatDuration(elapsedSeconds)}
       </div>
       <button
