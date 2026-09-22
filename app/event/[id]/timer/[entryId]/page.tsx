@@ -77,11 +77,13 @@ export default function TimerPage({
     ? computeBadge(elapsedSeconds, maxSeconds, toleranceSeconds)
     : null;
 
+  const isOvertime = badge === "overtime";
+
   const bgClass =
     badge === "on_time"
       ? "bg-status-ontime"
-      : badge === "overtime"
-      ? "bg-status-overtime"
+      : isOvertime
+      ? "blink-overtime"
       : "bg-base";
 
   const stop = async () => {
@@ -107,10 +109,12 @@ export default function TimerPage({
 
   return (
     <div
-      className={`flex min-h-screen flex-col items-center justify-center transition-colors duration-700 ${bgClass}`}
+      className={`flex min-h-screen flex-col items-center justify-center ${
+        isOvertime ? "" : "transition-colors duration-700"
+      } ${bgClass}`}
     >
       <p className="text-lg text-white/80">{entry.name}</p>
-      <div className="mt-4 tabular-nums text-8xl font-bold text-white sm:text-9xl">
+      <div className="mt-4 tabular-nums text-8xl font-bold text-white md:text-[200px]">
         {formatDuration(elapsedSeconds)}
       </div>
       <button

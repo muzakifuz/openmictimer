@@ -27,3 +27,18 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
 }
+
+/* Overtime blink: alternates between the two reds, 0.5s per color (1s cycle) */
+@keyframes blink-overtime {
+  0%,
+  100% {
+    background-color: #c33133;
+  }
+  50% {
+    background-color: #971a1c;
+  }
+}
+
+.blink-overtime {
+  animation: blink-overtime 1s ease-in-out infinite;
+}
