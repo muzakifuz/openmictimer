@@ -118,13 +118,28 @@ export default function TimerPage({
       <div className="mt-4">
         <TimerDisplay text={formatDuration(elapsedSeconds)} />
       </div>
-      <button
-        onClick={stop}
-        disabled={stopping || entry.status === "done"}
-        className="mt-8 flex items-center gap-2 rounded-lg bg-status-overtime px-6 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
-      >
-        <span className="h-3 w-3 bg-white" /> Stop
-      </button>
+      <div className="mt-8 flex items-center gap-3">
+        {/* Minimize: back to the list without stopping. The timer keeps
+            running (it's based on started_at in the database), and the list
+            shows a "Back to Timer" bar to return here. */}
+        <button
+          onClick={() => router.push(`/event/${eventId}`)}
+          disabled={stopping}
+          className="flex items-center gap-2 rounded-lg border border-white px-6 py-3 text-sm font-semibold text-white hover:bg-white/10 disabled:opacity-50"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Minimize
+        </button>
+        <button
+          onClick={stop}
+          disabled={stopping || entry.status === "done"}
+          className="flex items-center gap-2 rounded-lg bg-status-overtime px-6 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
+        >
+          <span className="h-3 w-3 bg-white" /> Stop
+        </button>
+      </div>
     </div>
   );
 }

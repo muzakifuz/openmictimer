@@ -38,7 +38,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [toleranceSeconds, setToleranceSeconds] = useState(DEFAULT_TOLERANCE_SECONDS);
   const [name, setName] = useState("");
   const [overtimeEnabled, setOvertimeEnabled] = useState(true);
-  const [timingSystem, setTimingSystem] = useState<TimingSystem>("tolerance");
+  const [timingSystem, setTimingSystem] = useState<TimingSystem>("lights");
   const [greenSeconds, setGreenSeconds] = useState(DEFAULT_GREEN_LIGHT_SECONDS);
   const [redSeconds, setRedSeconds] = useState(DEFAULT_RED_LIGHT_SECONDS);
   const [savingRules, setSavingRules] = useState(false);
@@ -68,6 +68,25 @@ export default function EventPage({ params }: { params: { id: string } }) {
     () => lineup.find((e) => e.status === "running") ?? null,
     [lineup]
   );
+
+  // While a lineup timer is minimized (running, but we're back on the list),
+  // tick a clock so the list can show the live time and light color.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!runningEntry) return;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(interval);
+  }, [runningEntry]);
+
+  const runningElapsed = runningEntry?.started_at
+    ? Math.max(0, Math.floor((now - new Date(runningEntry.started_at).getTime()) / 1000))
+    : 0;
+  // Use the saved rules (what the timer screen uses), not unsaved form edits.
+  const runningBadge =
+    runningEntry && event && event.overtime_note_enabled
+      ? computeEventBadge(runningElapsed, event)
+      : null;
 
   const loadEvent = useCallback(async () => {
     const { data } = await supabase
@@ -380,7 +399,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const rulesLocked = !!event && !editingRules;
 
   return (
-    <div className="min-h-screen bg-base px-6 py-10">
+    <div className={`min-h-screen bg-base px-6 py-10 ${runningEntry ? "pb-32" : ""}`}>
       <div className="mx-auto max-w-2xl">
         <header className="flex items-start justify-between">
           <div className="flex items-center gap-2">
@@ -478,37 +497,30 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 />
               </div>
 
-              <label className="mt-4 flex w-fit items-center gap-2 text-sm font-semibold text-white">
-                <input
-                  type="checkbox"
-                  checked={overtimeEnabled}
-                  onChange={(e) => setOvertimeEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-base-border accent-brand-blue"
-                />
-                Overtime Note
-              </label>
+              {/* Row: Overtime Note */}
+              <div className="py-4">
+                <label className="flex w-fit items-center gap-2 text-sm font-semibold text-white">
+                  <input
+                    type="checkbox"
+                    checked={overtimeEnabled}
+                    onChange={(e) => setOvertimeEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded border-base-border accent-brand-blue"
+                  />
+                  Overtime Note
+                </label>
+              </div>
 
-              <div className="mt-4">
+              {/* Row: Timing System + radio */}
+              <div className="py-4">
                 <label className="flex items-center gap-1.5 text-sm font-semibold">
                   Timing System
-                  <InfoTooltip text={"Time Tolerance: the screen turns green within Maximum Time \u00B1 tolerance and red after it. Green Light & Red Light: the screen turns green at the Green Light time and red at the Red Light time."} />
+                  <InfoTooltip text={"Green Light & Red Light: the screen turns green at the Green Light time and red at the Red Light time. Time Tolerance: the screen turns green within Maximum Time \u00B1 tolerance and red after it."} />
                 </label>
                 <div
                   role="radiogroup"
                   aria-label="Timing System"
                   className="mt-2 flex flex-wrap gap-x-6 gap-y-2"
                 >
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-white">
-                    <input
-                      type="radio"
-                      name="timing-system"
-                      value="tolerance"
-                      checked={timingSystem === "tolerance"}
-                      onChange={() => setTimingSystem("tolerance")}
-                      className="h-4 w-4 accent-brand-blue"
-                    />
-                    Time Tolerance
-                  </label>
                   <label className="flex cursor-pointer items-center gap-2 text-sm text-white">
                     <input
                       type="radio"
@@ -520,69 +532,82 @@ export default function EventPage({ params }: { params: { id: string } }) {
                     />
                     Green Light &amp; Red Light
                   </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="timing-system"
+                      value="tolerance"
+                      checked={timingSystem === "tolerance"}
+                      onChange={() => setTimingSystem("tolerance")}
+                      className="h-4 w-4 accent-brand-blue"
+                    />
+                    Time Tolerance
+                  </label>
                 </div>
               </div>
 
-              {timingSystem === "tolerance" ? (
-                <>
-                  <div className="mt-4">
-                    <label className="text-sm font-semibold">Maximum Time</label>
-                    <div className="mt-2 max-w-[220px]">
-                      <DurationInput totalSeconds={maxSeconds} onChange={setMaxSeconds} />
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <label className="flex items-center gap-1.5 text-sm font-semibold">
-                      Time Tolerance &plusmn;
-                      <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
-                    </label>
-                    <div className="mt-2 max-w-[140px]">
-                      <Stepper
-                        value={toleranceSeconds}
-                        onChange={setToleranceSeconds}
-                        min={0}
-                        max={300}
-                      />
-                      <p className="mt-1 text-center text-[11px] text-white/40">sec</p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-semibold">
-                        <span className="h-2.5 w-2.5 rounded-full bg-status-ontime" />
-                        Green Light
-                      </label>
-                      <div className="mt-2 max-w-[220px]">
-                        <DurationInput totalSeconds={greenSeconds} onChange={setGreenSeconds} />
+              {/* Row: inputs for the chosen timing system */}
+              <div className="py-4">
+                {timingSystem === "lights" ? (
+                  <>
+                    <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
+                      <div className="w-[300px] max-w-full">
+                        <label className="flex h-5 items-center gap-2 text-sm font-semibold">
+                          <span className="h-2.5 w-2.5 rounded-full bg-status-ontime" />
+                          Green Light
+                        </label>
+                        <div className="mt-2">
+                          <DurationInput totalSeconds={greenSeconds} onChange={setGreenSeconds} />
+                        </div>
+                      </div>
+                      <div className="w-[300px] max-w-full">
+                        <label className="flex h-5 items-center gap-2 text-sm font-semibold">
+                          <span className="h-2.5 w-2.5 rounded-full bg-status-overtime" />
+                          Red Light
+                        </label>
+                        <div className="mt-2">
+                          <DurationInput totalSeconds={redSeconds} onChange={setRedSeconds} />
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-semibold">
-                        <span className="h-2.5 w-2.5 rounded-full bg-status-overtime" />
-                        Red Light
+                    {lightsInvalid && (
+                      <p className="mt-2 text-xs text-[#FF6B6B]">
+                        Red Light must be later than Green Light.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
+                    <div className="w-[300px] max-w-full">
+                      <label className="flex h-5 items-center text-sm font-semibold">Maximum Time</label>
+                      <div className="mt-2">
+                        <DurationInput totalSeconds={maxSeconds} onChange={setMaxSeconds} />
+                      </div>
+                    </div>
+                    <div className="w-[140px]">
+                      <label className="flex h-5 items-center gap-1.5 whitespace-nowrap text-sm font-semibold">
+                        Time Tolerance &plusmn;
+                        <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
                       </label>
-                      <div className="mt-2 max-w-[220px]">
-                        <DurationInput totalSeconds={redSeconds} onChange={setRedSeconds} />
+                      <div className="mt-2">
+                        <Stepper
+                          value={toleranceSeconds}
+                          onChange={setToleranceSeconds}
+                          min={0}
+                          max={300}
+                        />
+                        <p className="mt-1 text-center text-[11px] text-white/40">sec</p>
                       </div>
                     </div>
                   </div>
-                  {lightsInvalid && (
-                    <p className="mt-2 text-xs text-[#FF6B6B]">
-                      Red Light must be later than Green Light.
-                    </p>
-                  )}
-                </>
-              )}
+                )}
 
-              {rulesError && (
-                <p className="mt-4 text-xs text-[#FF6B6B]">{rulesError}</p>
-              )}
+                {rulesError && (
+                  <p className="mt-4 text-xs text-[#FF6B6B]">{rulesError}</p>
+                )}
+              </div>
 
-              <div className="mt-6 flex gap-3">
+              <div className="mt-2 flex gap-3">
                 {event && (
                   <button
                     onClick={() => {
@@ -690,10 +715,12 @@ export default function EventPage({ params }: { params: { id: string } }) {
                           onClick={() =>
                             router.push(`/event/${eventId}/timer/${entry.id}`)
                           }
-                          className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-lg border border-brand-blue px-4 text-sm font-semibold text-brand-blue sm:flex-none"
+                          aria-label={`Open ${entry.name}'s timer`}
+                          className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-lg border border-brand-blue px-4 text-sm font-semibold text-brand-blue hover:bg-brand-blue/10 sm:flex-none"
                         >
                           <span className="h-2 w-2 animate-pulse rounded-full bg-brand-blue" />
-                          Running
+                          <span className="tabular-nums">{formatDuration(runningElapsed)}</span>
+                          <span className="text-white/80">Open Timer</span>
                         </button>
                       )}
 
@@ -735,7 +762,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 onClick={() => router.push(`/event/${eventId}/casual`)}
                 className="flex h-[50px] w-full items-center justify-center gap-2 rounded-lg border border-white px-4 text-sm font-semibold text-white hover:bg-white/5 sm:w-auto"
               >
-                <ClockIcon /> Casual Timer
+                <ClockIcon /> Timer for MC
               </button>
               <button
                 onClick={downloadList}
@@ -752,6 +779,33 @@ export default function EventPage({ params }: { params: { id: string } }) {
           If you have any suggestions for this tool, send me a DM on IG: @muzakifuz
         </footer>
       </div>
+
+      {runningEntry && (
+        <div
+          className={`fixed inset-x-0 bottom-0 z-40 border-t border-white/10 px-4 py-3 ${
+            runningBadge === "on_time"
+              ? "bg-status-ontime"
+              : runningBadge === "overtime"
+              ? "blink-overtime"
+              : "bg-base-card"
+          }`}
+        >
+          <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-xs text-white/70">On stage: {runningEntry.name}</p>
+              <p className="tabular-nums text-2xl font-bold leading-tight text-white">
+                {formatDuration(runningElapsed)}
+              </p>
+            </div>
+            <button
+              onClick={() => router.push(`/event/${eventId}/timer/${runningEntry.id}`)}
+              className="flex h-[44px] shrink-0 items-center gap-2 rounded-lg border border-white px-4 text-sm font-semibold text-white hover:bg-white/10"
+            >
+              <MaximizeIcon /> Back to Timer
+            </button>
+          </div>
+        </div>
+      )}
 
       <TransferModal
         open={showTransfer}
@@ -823,6 +877,20 @@ function ClockIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
       <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MaximizeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

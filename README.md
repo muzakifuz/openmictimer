@@ -11,7 +11,7 @@ deployed on Vercel.
   That URL is your event's private "manage" link — bookmark or share it
   with co-hosts.
 - **Save Rules**: event name, whether to show under/on-time/overtime
-  badges, and a **Timing System**:
+  badges, and a **Timing System** (Green Light & Red Light is the default):
   - *Time Tolerance* — a Maximum Time (minutes and seconds) and a Time
     Tolerance ± (seconds). The on-time window is `Maximum Time ± Tolerance`
     — under that window is "under", inside it is "on time", past it is
@@ -24,11 +24,14 @@ deployed on Vercel.
 - **Fullscreen timer**: counts up from 0:00. The time always fills 85% of
   the screen width, on any device. Background stays neutral
   below the tolerance window, turns green while inside it, and turns red
-  past it. Tap **Stop** to record the final time and badge.
+  past it. Tap **Stop** to record the final time and badge, or
+  **Minimize** to go back to the lineup (to reorder or write notes) while
+  the timer keeps running — a "Back to Timer" bar at the bottom of the
+  list shows the live time and takes you straight back.
 - **Edit a lineup entry**: the pencil icon on each row opens a dialog to
   rename the entry, adjust its recorded stage time (once it's finished),
   or delete it from the lineup entirely.
-- **Casual Timer**: a quick timer for the MC or anyone who speaks but
+- **Timer for MC**: a quick timer for the MC or anyone who speaks but
   isn't a performer. It starts immediately, you switch the Red Light /
   Green Light by hand, and **Stop** goes back to the lineup. Nothing is
   saved.
@@ -118,7 +121,7 @@ app/
   page.tsx                          → creates a new event id, redirects
   event/[id]/page.tsx               → rules + lineup manager screen
   event/[id]/timer/[entryId]/page.tsx → fullscreen live timer
-  event/[id]/casual/page.tsx        → Casual Timer (manual lights, not saved)
+  event/[id]/casual/page.tsx        → Timer for MC (manual lights, not saved)
 components/
   BadgePill.tsx                     → UNDER / ON TIME / OVERTIME pill
   ConfirmModal.tsx                  → generic confirm dialog
