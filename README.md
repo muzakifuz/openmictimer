@@ -11,17 +11,27 @@ deployed on Vercel.
   That URL is your event's private "manage" link — bookmark or share it
   with co-hosts.
 - **Save Rules**: event name, whether to show under/on-time/overtime
-  badges, a Maximum Time (minutes and seconds), and a Time Tolerance ±
-  (seconds). The on-time window is `Maximum Time ± Tolerance` — under
-  that window is "under", inside it is "on time", past it is "overtime".
+  badges, and a **Timing System**:
+  - *Time Tolerance* — a Maximum Time (minutes and seconds) and a Time
+    Tolerance ± (seconds). The on-time window is `Maximum Time ± Tolerance`
+    — under that window is "under", inside it is "on time", past it is
+    "overtime".
+  - *Green Light & Red Light* — a Green Light time and a Red Light time.
+    Before green is "under", from green until red is "on time", and from
+    the red light onward is "overtime".
 - **Add to Lineup**: add each comic by name. Tap **Start Count** to open
   the fullscreen timer for that person.
-- **Fullscreen timer**: counts up from 0:00. Background stays neutral
+- **Fullscreen timer**: counts up from 0:00. The time always fills 85% of
+  the screen width, on any device. Background stays neutral
   below the tolerance window, turns green while inside it, and turns red
   past it. Tap **Stop** to record the final time and badge.
 - **Edit a lineup entry**: the pencil icon on each row opens a dialog to
   rename the entry, adjust its recorded stage time (once it's finished),
   or delete it from the lineup entirely.
+- **Casual Timer**: a quick timer for the MC or anyone who speaks but
+  isn't a performer. It starts immediately, you switch the Red Light /
+  Green Light by hand, and **Stop** goes back to the lineup. Nothing is
+  saved.
 - **Transfer the Timer**: shows a QR code (and a copy-able link) to the
   live timer. Scan it on another phone or laptop — e.g. handing control
   from the sign-up table to the stage — and it shows the exact same
@@ -108,10 +118,13 @@ app/
   page.tsx                          → creates a new event id, redirects
   event/[id]/page.tsx               → rules + lineup manager screen
   event/[id]/timer/[entryId]/page.tsx → fullscreen live timer
+  event/[id]/casual/page.tsx        → Casual Timer (manual lights, not saved)
 components/
   BadgePill.tsx                     → UNDER / ON TIME / OVERTIME pill
   ConfirmModal.tsx                  → generic confirm dialog
   TransferModal.tsx                 → QR code + link for timer handoff
+  TimerDisplay.tsx                  → timer digits sized to 85% of screen width
+  FullscreenButton.tsx              → fullscreen toggle shared by both timers
 lib/
   supabase.ts                       → Supabase browser client
   types.ts                          → shared types + badge/duration helpers

@@ -1,10 +1,27 @@
+export type TimingSystem = "tolerance" | "lights";
+
 export type OpenMicEvent = {
   id: string;
   name: string;
   max_time_seconds: number;
   tolerance_seconds: number;
   overtime_note_enabled: boolean;
+  timing_system: TimingSystem;
+  green_light_seconds: number;
+  red_light_seconds: number;
   created_at: string;
+};
+
+export const DEFAULT_GREEN_LIGHT_SECONDS = 240; // 4:00
+export const DEFAULT_RED_LIGHT_SECONDS = 300; // 5:00
+
+// The subset of an event's rules needed to decide under / on time / overtime.
+export type TimingRules = {
+  timing_system?: TimingSystem | null;
+  max_time_seconds: number;
+  tolerance_seconds: number;
+  green_light_seconds?: number | null;
+  red_light_seconds?: number | null;
 };
 
 export type LineupStatus = "pending" | "running" | "done";
@@ -33,6 +50,29 @@ export function computeBadge(
   if (elapsedSeconds < lower) return "under";
   if (elapsedSeconds <= upper) return "on_time";
   return "overtime";
+}
+
+// Green Light & Red Light: under before the green light, on time from the
+// green light until the red light, overtime once the red light is on.
+export function computeLightsBadge(
+  elapsedSeconds: number,
+  greenSeconds: number,
+  redSeconds: number
+): Badge {
+  if (elapsedSeconds < greenSeconds) return "under";
+  if (elapsedSeconds < redSeconds) return "on_time";
+  return "overtime";
+}
+
+export function computeEventBadge(elapsedSeconds: number, rules: TimingRules): Badge {
+  if (rules.timing_system === "lights") {
+    return computeLightsBadge(
+      elapsedSeconds,
+      rules.green_light_seconds ?? DEFAULT_GREEN_LIGHT_SECONDS,
+      rules.red_light_seconds ?? DEFAULT_RED_LIGHT_SECONDS
+    );
+  }
+  return computeBadge(elapsedSeconds, rules.max_time_seconds, rules.tolerance_seconds);
 }
 
 export function formatDuration(totalSeconds: number): string {

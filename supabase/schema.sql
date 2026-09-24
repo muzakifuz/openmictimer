@@ -29,6 +29,15 @@ create table if not exists lineup_entries (
 -- before this field existed, without touching any existing rows.
 alter table lineup_entries add column if not exists performance_note text;
 
+-- Safe to re-run: Timing System (Time Tolerance vs Green Light & Red Light).
+-- Existing events keep working as "tolerance" with the defaults below.
+alter table events add column if not exists timing_system text not null default 'tolerance';
+alter table events add column if not exists green_light_seconds integer not null default 240;
+alter table events add column if not exists red_light_seconds integer not null default 300;
+alter table events drop constraint if exists events_timing_system_check;
+alter table events add constraint events_timing_system_check
+  check (timing_system in ('tolerance', 'lights'));
+
 create index if not exists lineup_entries_event_id_idx on lineup_entries (event_id, position);
 
 -- Row Level Security
@@ -52,5 +61,15 @@ create policy "public write lineup" on lineup_entries for all using (true) with 
 
 -- Realtime: lets the fullscreen timer and the manager list stay in sync
 -- across devices (this is what powers "Transfer the Timer").
-alter publication supabase_realtime add table events;
-alter publication supabase_realtime add table lineup_entries;
+-- (Wrapped so re-running this file doesn't fail if they're already added.)
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table events;
+  exception when duplicate_object then null;
+  end;
+  begin
+    alter publication supabase_realtime add table lineup_entries;
+  exception when duplicate_object then null;
+  end;
+end $$;

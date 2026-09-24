@@ -8,9 +8,12 @@ import {
   OpenMicEvent,
   LineupEntry,
   Badge,
+  TimingSystem,
   badgeLabel,
-  computeBadge,
+  computeEventBadge,
   formatDuration,
+  DEFAULT_GREEN_LIGHT_SECONDS,
+  DEFAULT_RED_LIGHT_SECONDS,
 } from "@/lib/types";
 import BadgePill from "@/components/BadgePill";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -35,7 +38,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [toleranceSeconds, setToleranceSeconds] = useState(DEFAULT_TOLERANCE_SECONDS);
   const [name, setName] = useState("");
   const [overtimeEnabled, setOvertimeEnabled] = useState(true);
+  const [timingSystem, setTimingSystem] = useState<TimingSystem>("tolerance");
+  const [greenSeconds, setGreenSeconds] = useState(DEFAULT_GREEN_LIGHT_SECONDS);
+  const [redSeconds, setRedSeconds] = useState(DEFAULT_RED_LIGHT_SECONDS);
   const [savingRules, setSavingRules] = useState(false);
+  const [rulesError, setRulesError] = useState<string | null>(null);
+
+  const lightsInvalid = timingSystem === "lights" && redSeconds <= greenSeconds;
 
   const [lineup, setLineup] = useState<LineupEntry[]>([]);
   const [newLineupName, setNewLineupName] = useState("");
@@ -73,6 +82,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
       setToleranceSeconds(data.tolerance_seconds);
       setName(data.name);
       setOvertimeEnabled(data.overtime_note_enabled);
+      setTimingSystem(data.timing_system === "lights" ? "lights" : "tolerance");
+      setGreenSeconds(data.green_light_seconds ?? DEFAULT_GREEN_LIGHT_SECONDS);
+      setRedSeconds(data.red_light_seconds ?? DEFAULT_RED_LIGHT_SECONDS);
       setEditingRules(false);
     }
     setLoading(false);
@@ -134,14 +146,18 @@ export default function EventPage({ params }: { params: { id: string } }) {
   }, [justSavedRules, event]);
 
   const saveRules = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || lightsInvalid) return;
     setSavingRules(true);
+    setRulesError(null);
     const payload = {
       id: eventId,
       name: name.trim(),
       max_time_seconds: maxSeconds,
       tolerance_seconds: toleranceSeconds,
       overtime_note_enabled: overtimeEnabled,
+      timing_system: timingSystem,
+      green_light_seconds: greenSeconds,
+      red_light_seconds: redSeconds,
     };
     const { data, error } = await supabase
       .from("events")
@@ -153,6 +169,10 @@ export default function EventPage({ params }: { params: { id: string } }) {
       setEvent(data as OpenMicEvent);
       setEditingRules(false);
       setJustSavedRules(true);
+    } else if (error) {
+      // Most likely cause after this update: the new timing-system columns
+      // haven't been added yet (re-run supabase/schema.sql).
+      setRulesError(`Couldn't save the rules: ${error.message}`);
     }
   };
 
@@ -235,7 +255,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
     if (editingEntry.status === "done") {
       updates.elapsed_seconds = newElapsedSeconds;
       updates.badge = overtimeEnabled
-        ? computeBadge(newElapsedSeconds, maxSeconds, toleranceSeconds)
+        ? computeEventBadge(newElapsedSeconds, {
+            timing_system: timingSystem,
+            max_time_seconds: maxSeconds,
+            tolerance_seconds: toleranceSeconds,
+            green_light_seconds: greenSeconds,
+            red_light_seconds: redSeconds,
+          })
         : null;
     }
     await supabase.from("lineup_entries").update(updates).eq("id", editingEntry.id);
@@ -275,14 +301,27 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text(`Maximum Time: ${formatDuration(maxSeconds)}`, 40, 68);
-    doc.text(`Time Tolerance: \u00B1 ${toleranceSeconds}s`, 40, 82);
-    doc.text(
+    const infoLines =
+      timingSystem === "lights"
+        ? [
+            "Timing System: Green Light & Red Light",
+            `Green Light: ${formatDuration(greenSeconds)}`,
+            `Red Light: ${formatDuration(redSeconds)}`,
+          ]
+        : [
+            "Timing System: Time Tolerance",
+            `Maximum Time: ${formatDuration(maxSeconds)}`,
+            `Time Tolerance: \u00B1 ${toleranceSeconds}s`,
+          ];
+    infoLines.push(
       `Overtime Note: ${overtimeEnabled ? "Enabled" : "Disabled"}`,
-      40,
-      96
+      `Generated: ${new Date().toLocaleString()}`
     );
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 110);
+    let infoY = 68;
+    for (const line of infoLines) {
+      doc.text(line, 40, infoY);
+      infoY += 14;
+    }
 
     const rows = lineup.map((entry) => [
       entry.name,
@@ -294,7 +333,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
     ]);
 
     autoTable(doc, {
-      startY: 130,
+      startY: infoY + 6,
       head: [["Lineup Name", "Stage Time", "Timer Note", "Performance Note"]],
       body: rows,
       styles: { font: "helvetica", fontSize: 10, cellPadding: 6 },
@@ -385,18 +424,39 @@ export default function EventPage({ params }: { params: { id: string } }) {
                     {overtimeEnabled ? "Yes" : "No"}
                   </p>
                 </div>
-                <div>
-                  <label className="text-sm text-white/50">Maximum Time</label>
-                  <p className="mt-1 font-bold text-white">
-                    {formatDuration(maxSeconds)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm text-white/50">Time Tolerance</label>
-                  <p className="mt-1 font-bold text-white">
-                    {toleranceSeconds} Sec.
-                  </p>
-                </div>
+                {timingSystem === "lights" ? (
+                  <>
+                    <div>
+                      <label className="text-sm text-white/50">Green Light</label>
+                      <p className="mt-1 flex items-center gap-2 font-bold text-white">
+                        <span className="h-2.5 w-2.5 rounded-full bg-status-ontime" />
+                        {formatDuration(greenSeconds)}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-white/50">Red Light</label>
+                      <p className="mt-1 flex items-center gap-2 font-bold text-white">
+                        <span className="h-2.5 w-2.5 rounded-full bg-status-overtime" />
+                        {formatDuration(redSeconds)}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-sm text-white/50">Maximum Time</label>
+                      <p className="mt-1 font-bold text-white">
+                        {formatDuration(maxSeconds)}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-white/50">Time Tolerance</label>
+                      <p className="mt-1 font-bold text-white">
+                        {toleranceSeconds} Sec.
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
 
               <button
@@ -429,27 +489,98 @@ export default function EventPage({ params }: { params: { id: string } }) {
               </label>
 
               <div className="mt-4">
-                <label className="text-sm font-semibold">Maximum Time</label>
-                <div className="mt-2 max-w-[220px]">
-                  <DurationInput totalSeconds={maxSeconds} onChange={setMaxSeconds} />
+                <label className="flex items-center gap-1.5 text-sm font-semibold">
+                  Timing System
+                  <InfoTooltip text={"Time Tolerance: the screen turns green within Maximum Time \u00B1 tolerance and red after it. Green Light & Red Light: the screen turns green at the Green Light time and red at the Red Light time."} />
+                </label>
+                <div
+                  role="radiogroup"
+                  aria-label="Timing System"
+                  className="mt-2 flex flex-wrap gap-x-6 gap-y-2"
+                >
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="timing-system"
+                      value="tolerance"
+                      checked={timingSystem === "tolerance"}
+                      onChange={() => setTimingSystem("tolerance")}
+                      className="h-4 w-4 accent-brand-blue"
+                    />
+                    Time Tolerance
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="timing-system"
+                      value="lights"
+                      checked={timingSystem === "lights"}
+                      onChange={() => setTimingSystem("lights")}
+                      className="h-4 w-4 accent-brand-blue"
+                    />
+                    Green Light &amp; Red Light
+                  </label>
                 </div>
               </div>
 
-              <div className="mt-4">
-                <label className="flex items-center gap-1.5 text-sm font-semibold">
-                  Time Tolerance &plusmn;
-                  <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
-                </label>
-                <div className="mt-2 max-w-[140px]">
-                  <Stepper
-                    value={toleranceSeconds}
-                    onChange={setToleranceSeconds}
-                    min={0}
-                    max={300}
-                  />
-                  <p className="mt-1 text-center text-[11px] text-white/40">sec</p>
-                </div>
-              </div>
+              {timingSystem === "tolerance" ? (
+                <>
+                  <div className="mt-4">
+                    <label className="text-sm font-semibold">Maximum Time</label>
+                    <div className="mt-2 max-w-[220px]">
+                      <DurationInput totalSeconds={maxSeconds} onChange={setMaxSeconds} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="flex items-center gap-1.5 text-sm font-semibold">
+                      Time Tolerance &plusmn;
+                      <InfoTooltip text={"The number of seconds a comic can run under or over the Maximum Time and still count as \"on time\". Past that window they're flagged under or overtime."} />
+                    </label>
+                    <div className="mt-2 max-w-[140px]">
+                      <Stepper
+                        value={toleranceSeconds}
+                        onChange={setToleranceSeconds}
+                        min={0}
+                        max={300}
+                      />
+                      <p className="mt-1 text-center text-[11px] text-white/40">sec</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold">
+                        <span className="h-2.5 w-2.5 rounded-full bg-status-ontime" />
+                        Green Light
+                      </label>
+                      <div className="mt-2 max-w-[220px]">
+                        <DurationInput totalSeconds={greenSeconds} onChange={setGreenSeconds} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold">
+                        <span className="h-2.5 w-2.5 rounded-full bg-status-overtime" />
+                        Red Light
+                      </label>
+                      <div className="mt-2 max-w-[220px]">
+                        <DurationInput totalSeconds={redSeconds} onChange={setRedSeconds} />
+                      </div>
+                    </div>
+                  </div>
+                  {lightsInvalid && (
+                    <p className="mt-2 text-xs text-[#FF6B6B]">
+                      Red Light must be later than Green Light.
+                    </p>
+                  )}
+                </>
+              )}
+
+              {rulesError && (
+                <p className="mt-4 text-xs text-[#FF6B6B]">{rulesError}</p>
+              )}
 
               <div className="mt-6 flex gap-3">
                 {event && (
@@ -459,6 +590,10 @@ export default function EventPage({ params }: { params: { id: string } }) {
                       setMaxSeconds(event.max_time_seconds);
                       setToleranceSeconds(event.tolerance_seconds);
                       setOvertimeEnabled(event.overtime_note_enabled);
+                      setTimingSystem(event.timing_system === "lights" ? "lights" : "tolerance");
+                      setGreenSeconds(event.green_light_seconds ?? DEFAULT_GREEN_LIGHT_SECONDS);
+                      setRedSeconds(event.red_light_seconds ?? DEFAULT_RED_LIGHT_SECONDS);
+                      setRulesError(null);
                       setEditingRules(false);
                     }}
                     className="h-[50px] shrink-0 rounded-lg border border-base-border px-5 text-sm font-semibold text-white/70 hover:bg-white/5"
@@ -468,7 +603,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 )}
                 <button
                   onClick={saveRules}
-                  disabled={!name.trim() || savingRules}
+                  disabled={!name.trim() || savingRules || lightsInvalid}
                   className="h-[50px] w-full rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon text-sm font-semibold text-white disabled:opacity-40"
                 >
                   {savingRules ? "Saving..." : "Save Rules"}
@@ -597,6 +732,12 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 <QrIcon /> Transfer the Timer
               </button>
               <button
+                onClick={() => router.push(`/event/${eventId}/casual`)}
+                className="flex h-[50px] w-full items-center justify-center gap-2 rounded-lg border border-white px-4 text-sm font-semibold text-white hover:bg-white/5 sm:w-auto"
+              >
+                <ClockIcon /> Casual Timer
+              </button>
+              <button
                 onClick={downloadList}
                 disabled={lineup.length === 0}
                 className="flex h-[50px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-brand-red to-brand-maroon px-4 text-sm font-semibold text-white disabled:opacity-40 sm:w-auto"
@@ -621,7 +762,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
       <ConfirmModal
         open={showEditRulesConfirm}
         title="Edit event rules?"
-        description="Changing the name, overtime note, maximum time, or tolerance only applies going forward. It won't change the Stage Time, Timer Note, or Performance Note already recorded for anyone who's already been on stage."
+        description="Changing the name, overtime note, or timing system only applies going forward. It won't change the Stage Time, Timer Note, or Performance Note already recorded for anyone who's already been on stage."
         confirmLabel="Edit Detail"
         onConfirm={() => {
           setShowEditRulesConfirm(false);
